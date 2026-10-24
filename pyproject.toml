@@ -1,0 +1,45 @@
+[project]
+name = "job-search-mcp"
+version = "0.1.0"
+description = "Read-only MCP server that searches current US job postings from free, legitimate job feeds."
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+dependencies = [
+    "httpx==0.28.1",
+    "mcp==2.3.0",
+    "pydantic==2.14.1",
+    "pyyaml==6.0.3",
+]
+
+[project.scripts]
+job-search-mcp = "job_search_mcp:main"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "bandit==1.9.4",
+    "detect-secrets==1.5.0",
+    "pip-audit==2.10.1",
+    "pytest==9.1.1",
+    "ruff==0.17.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "N", "PL", "RUF"]
+ignore = ["PLR2004", "PLR0913"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/job_search_mcp/server.py" = ["PLR0913", "PLR0917"]  # the search tool has many optional filters by design
+"tests/*" = ["S101", "PLR2004", "S105", "S106", "RUF001"]

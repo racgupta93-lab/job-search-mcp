@@ -1,0 +1,32 @@
+# Which company job boards to search.
+#
+# Copy this file to "companies.yaml" (which git ignores) and edit it.
+# Each name is the company's "board name": the last part of its public job
+# board address, e.g. boards.greenhouse.io/<name>, jobs.lever.co/<name>,
+# jobs.ashbyhq.com/<name>.  Letters, digits, "-" and "_" only.
+#
+# Only companies that publish on these public job boards will work.
+# Use "lever_eu" for companies whose Lever board is at jobs.eu.lever.co.
+
+greenhouse:
+  - airbnb
+  - stripe
+  - databricks
+  - figma
+  - robinhood
+  - reddit
+  - instacart
+  - duolingo
+
+lever:
+  - spotify
+  - palantir
+
+ashby:
+  - notion
+  - ramp
+  - openai
+  - linear
+  - snowflake
+
+lever_eu: []
