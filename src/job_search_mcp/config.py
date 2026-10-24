@@ -113,7 +113,10 @@ def _load_companies(path: Path, fallback: Path) -> tuple[CompaniesConfig, str]:
     note = ""
     if not path.is_file():
         if fallback.is_file():
-            note = f"{path.name} not found; using the example list {fallback.name}"
+            note = (
+                f"Using the built-in starter list of companies ({fallback.name}); this is normal. "
+                f"Copy it to {path.name} only if you want to customize the list."
+            )
             path = fallback
         else:
             return CompaniesConfig(), f"no companies file found at {path}"

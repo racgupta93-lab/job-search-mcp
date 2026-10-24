@@ -145,7 +145,7 @@ class AdzunaSource(JobSource):
                 name=self.name,
                 companies=0,
                 status="not_configured",
-                detail="set ADZUNA_APP_ID and ADZUNA_APP_KEY in .env (see README)",
+                detail="optional (paid after a small trial): set ADZUNA_APP_ID and _KEY in .env",
             )
         try:
             await self._http.get_json(

@@ -82,7 +82,7 @@ class LeverSource(BoardSource):
             "https://api.eu.lever.co/v0/postings" if eu else "https://api.lever.co/v0/postings"
         )
         self.name = "lever_eu" if eu else "lever"
-        self.config_hint = f"add company names under '{self.name}:' in companies.yaml"
+        self.config_hint = f"optional: add company names under '{self.name}:' in companies.yaml"
 
     def _list_url(self, board: str) -> str:
         return f"{self.base_url}/{board}?mode=json"

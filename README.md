@@ -160,7 +160,7 @@ You should see each source as `ok` or `not_configured`, for example:
 ```text
 greenhouse  ok             reachable (checked board 'airbnb')
 muse        ok             reachable; no API key (500 requests/hour limit)
-adzuna      not_configured set ADZUNA_APP_ID and ADZUNA_APP_KEY in .env (see README)
+adzuna      not_configured optional, paid beyond a small trial: set ADZUNA_APP_ID and ADZUNA_APP_KEY in .env
 ```
 
 (Running `uv run job-search-mcp` with no option starts the real server, which just waits
