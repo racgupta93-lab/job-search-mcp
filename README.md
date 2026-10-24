@@ -490,6 +490,10 @@ Adding a source means: write a class in `sources/`, add its host to `ALLOWED_HOS
 * Only the companies in your list (plus The Muse / Adzuna search) are searched; coverage is not "all jobs".
 * The Muse has many stale postings and cannot confirm a job is open.
 * Level, US-location, salary-from-text and work-authorization are heuristics.
+* A few companies are unusually large (for example SpaceX, with about 2,800 postings): their full
+  text can exceed the 15 MB response cap, so their postings are shown without full text (and
+  without work-authorization or salary-from-text analysis) and a warning says so. Raise
+  `JOB_SEARCH_MAX_RESPONSE_MB` (up to 50) if you need them.
 * Job titles match by words, with no synonyms ("BI analyst" will not find "Business Intelligence
   Analyst").
 * English only; US only.

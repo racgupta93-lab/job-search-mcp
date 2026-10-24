@@ -29,6 +29,10 @@ def parse_job(board: str, raw: Any) -> Job | None:
     title = clean_text(raw.get("title"), 300)
     if not isinstance(job_id, int) or not isinstance(url, str) or not title:
         return None
+    if url.startswith("http://"):
+        # Some companies publish plain-http links. Never hand those on: use the job's page on
+        # Greenhouse's own https site instead of discarding the posting.
+        url = f"https://job-boards.greenhouse.io/{board}/jobs/{job_id}"
     if not url.startswith("https://"):
         return None
     location_raw = raw.get("location")

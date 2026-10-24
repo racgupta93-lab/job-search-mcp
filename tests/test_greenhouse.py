@@ -47,7 +47,7 @@ def test_parse_job_rejects_bad_records():
     assert parse_job("a", "nope") is None
     assert parse_job("a", {**RAW, "id": "x"}) is None
     assert parse_job("a", {**RAW, "title": ""}) is None
-    assert parse_job("a", {**RAW, "absolute_url": "http://insecure.example.com"}) is None
+    assert parse_job("a", {**RAW, "absolute_url": "ftp://x.example.com"}) is None
     assert parse_job("a", {**RAW, "absolute_url": None}) is None
 
 
@@ -98,3 +98,13 @@ def test_check_reports_ok_error_and_unconfigured():
     assert asyncio.run(bad.check()).status == "error"
     none = make_source(lambda r: httpx.Response(200), [])
     assert asyncio.run(none.check()).status == "not_configured"
+
+
+def test_plain_http_links_are_replaced_with_greenhouses_https_page_not_dropped():
+    # Real case: Block and Bankrate publish http:// links; all their postings were being lost.
+    job = parse_job(
+        "acme", {**RAW, "absolute_url": "http://acme.example.com/careers/jobs/123?gh_jid=123"}
+    )
+    assert job is not None
+    assert job.url == "https://job-boards.greenhouse.io/acme/jobs/123"
+    assert job.url.startswith("https://")
