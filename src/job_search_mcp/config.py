@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 # A company "board token" ends up inside a URL path, so it must be boring:
 # letters, digits, "-" and "_" only. This blocks "../" and similar tricks.
 BOARD_TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
-MAX_COMPANIES_PER_SOURCE = 200
+MAX_COMPANIES_PER_SOURCE = 1000
 _ENV_PREFIXES = ("ADZUNA_", "MUSE_", "JOB_SEARCH_")
 _PLACEHOLDER_HINT = "_here"
 
@@ -56,7 +56,7 @@ class Settings(BaseModel):
     companies_file: Path
     max_age_days: int = Field(default=30, ge=1, le=365)
     max_response_bytes: int = Field(default=15 * 1024 * 1024, ge=1024)
-    requests_per_second: float = Field(default=2.0, gt=0, le=20)
+    requests_per_second: float = Field(default=5.0, ge=0.5, le=10)
     adzuna_app_id: SecretStr | None = None
     adzuna_app_key: SecretStr | None = None
     muse_api_key: SecretStr | None = None
@@ -99,6 +99,16 @@ def _int_env(name: str, default: int) -> int:
         raise ConfigError(f"{name} must be a whole number") from None
 
 
+def _float_env(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        raise ConfigError(f"{name} must be a number") from None
+
+
 def _load_companies(path: Path, fallback: Path) -> tuple[CompaniesConfig, str]:
     note = ""
     if not path.is_file():
@@ -128,6 +138,9 @@ def load_settings() -> Settings:
     ).expanduser()
     companies, note = _load_companies(companies_path, home / "companies.example.yaml")
 
+    rate = _float_env("JOB_SEARCH_REQUESTS_PER_SECOND", 5.0)
+    if not 0.5 <= rate <= 10:
+        raise ConfigError("JOB_SEARCH_REQUESTS_PER_SECOND must be between 0.5 and 10")
     max_mb = _int_env("JOB_SEARCH_MAX_RESPONSE_MB", 15)
     if not 1 <= max_mb <= 50:
         raise ConfigError("JOB_SEARCH_MAX_RESPONSE_MB must be between 1 and 50")
@@ -137,6 +150,7 @@ def load_settings() -> Settings:
             companies_file=companies_path,
             max_age_days=_int_env("JOB_SEARCH_MAX_AGE_DAYS", 30),
             max_response_bytes=max_mb * 1024 * 1024,
+            requests_per_second=rate,
             adzuna_app_id=_secret("ADZUNA_APP_ID"),
             adzuna_app_key=_secret("ADZUNA_APP_KEY"),
             muse_api_key=_secret("MUSE_API_KEY"),

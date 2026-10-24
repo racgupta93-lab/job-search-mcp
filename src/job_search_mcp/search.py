@@ -12,6 +12,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from job_search_mcp.config import BOARD_TOKEN
@@ -28,6 +31,8 @@ from job_search_mcp.filters import (
 )
 from job_search_mcp.http_client import FetchError, NotFoundError
 from job_search_mcp.injection import FLAG as INJECTION_FLAG
+from job_search_mcp.levels import detect_level
+from job_search_mcp.location import us_location
 from job_search_mcp.models import (
     JobDetails,
     JobSummary,
@@ -52,6 +57,7 @@ log = logging.getLogger(__name__)
 
 MAX_QUERY_TITLES = 3  # search-style sources (Muse, Adzuna) get at most this many queries
 MAX_LINK_CHECKS = 20
+SEARCH_TIME_BUDGET_SECONDS = 25.0  # slower company boards finish in the background
 DETAIL_DESCRIPTION_CHARS = 8000
 INDEXED_MATCHES = 300  # how many matches get remembered for get_job_details
 _NATIVE_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
@@ -116,9 +122,51 @@ def _classify(job: Job) -> WorkAuthResult:
 # --------------------------------------------------------------------------- #
 # Fetching
 # --------------------------------------------------------------------------- #
+@dataclass
+class _Fetched:
+    jobs: list[Job] = field(default_factory=list)
+    seen: int = 0  # postings looked at, including those dropped early
+    removed_old_early: int = 0
+
+
+def _make_prefilter(f: SearchFilters, stats: dict[str, int]) -> Callable[[Job], bool]:
+    """A cheap test on fields known BEFORE full text is downloaded (title, location, date).
+
+    It applies exactly the same rules as the final filters, so it never drops a posting the
+    final filters would keep. Rules that need the description (salary written in text,
+    work authorization, matching words in the description) are left to the final pass.
+    """
+    cutoff = datetime.now(UTC) - timedelta(days=f.posted_within_days)
+
+    def keep(job: Job) -> bool:
+        if job.posted_at is None:
+            if not f.include_undated:
+                return False
+        elif job.posted_at < cutoff:
+            stats["old"] = stats.get("old", 0) + 1
+            return False
+        level, _ = detect_level(job.title, job.level_hint)
+        probe = job.model_copy(
+            update={"level": level, "us_location": us_location(job.country, job.location)}
+        )
+        return (
+            us_matches(probe, f.us_only, f.include_unknown_location)
+            and (f.search_description or title_matches(probe, f.job_titles))
+            and level_matches(probe, f.levels, f.include_unspecified_level)
+            and workplace_matches(probe, f.workplace, f.include_unspecified_workplace)
+            and location_matches(probe, f.location, f.include_remote_with_location)
+        )
+
+    return keep
+
+
 async def _fetch_all(
-    app: App, sources: list[JobSource], f: SearchFilters, warnings: list[str], notes: list[str]
-) -> list[Job]:
+    app: App,
+    sources: list[JobSource],
+    f: SearchFilters,
+    warnings: list[str],
+    notes: list[str],
+) -> _Fetched:
     titles = f.job_titles[:MAX_QUERY_TITLES]
     if len(f.job_titles) > MAX_QUERY_TITLES:
         notes.append(
@@ -127,11 +175,13 @@ async def _fetch_all(
         )
     per_query = max(60, 300 // max(1, len(titles)))
     single_level = f.levels[0] if len(f.levels) == 1 else None
+    stats: dict[str, int] = {}
+    prefilter = _make_prefilter(f, stats)
 
     jobs_in_flight: list[tuple[str, asyncio.Future[FetchResult]]] = []
     for source in sources:
         if isinstance(source, BoardSource):
-            queries: list[SourceQuery | None] = [None]
+            queries = [SourceQuery(prefilter=prefilter, time_budget=SEARCH_TIME_BUDGET_SECONDS)]
         else:
             queries = [
                 SourceQuery(
@@ -149,15 +199,17 @@ async def _fetch_all(
         ]
 
     results = await asyncio.gather(*(fut for _, fut in jobs_in_flight), return_exceptions=True)
-    raw: list[Job] = []
+    fetched = _Fetched()
     for (name, _), result in zip(jobs_in_flight, results, strict=True):
         if isinstance(result, BaseException):
             log.warning("source %s failed: %s", name, type(result).__name__)
             warnings.append(f"{name}: failed unexpectedly ({type(result).__name__})")
             continue
-        raw.extend(result.jobs)
+        fetched.jobs.extend(result.jobs)
+        fetched.seen += result.seen if result.seen is not None else len(result.jobs)
         warnings.extend(w for w in result.warnings if w not in warnings)
-    return raw
+    fetched.removed_old_early = stats.get("old", 0)
+    return fetched
 
 
 # --------------------------------------------------------------------------- #
@@ -190,10 +242,10 @@ async def check_link(app: App, job: Job) -> LinkStatus:  # noqa: PLR0911  # one 
             ashby = next((s for s in app.sources if s.name == "ashby"), None)
             if not isinstance(ashby, BoardSource):
                 return "unverified"
-            current = await ashby.fetch_jobs()
-            if not current.jobs:
+            current = await ashby.fetch_board(board)
+            if not current:
                 return "unverified"
-            return "live" if any(j.id == job.id for j in current.jobs) else "gone"
+            return "live" if any(j.id == job.id for j in current) else "gone"
     except NotFoundError:
         return "gone"
     except FetchError:
@@ -212,15 +264,14 @@ async def _check_links(app: App, jobs: list[Job]) -> list[LinkStatus]:
 def _sort_key(f: SearchFilters):
     if f.sort_by == "salary_high":
 
-        def by_salary(item: tuple[Job, WorkAuthResult]) -> tuple[int, float]:
-            rng = annual_usd_range(item[0])
+        def by_salary(job: Job) -> tuple[int, float]:
+            rng = annual_usd_range(job)
             return (0, -rng[1]) if rng else (1, 0.0)
 
         return by_salary
 
-    def by_date(item: tuple[Job, WorkAuthResult]) -> tuple[int, float]:
-        posted = item[0].posted_at
-        return (0, -posted.timestamp()) if posted else (1, 0.0)
+    def by_date(job: Job) -> tuple[int, float]:
+        return (0, -job.posted_at.timestamp()) if job.posted_at else (1, 0.0)
 
     return by_date
 
@@ -238,9 +289,9 @@ async def run_search(app: App, f: SearchFilters) -> SearchResult:
     if not sources:
         warnings.append("No usable sources. Run list_sources to see what is configured.")
 
-    raw = await _fetch_all(app, sources, f, warnings, notes)
+    fetched = await _fetch_all(app, sources, f, warnings, notes)
     prepared = prepare_jobs(
-        raw, max_age_days=f.posted_within_days, include_undated=f.include_undated
+        fetched.jobs, max_age_days=f.posted_within_days, include_undated=f.include_undated
     )
 
     kept = [
@@ -255,12 +306,18 @@ async def run_search(app: App, f: SearchFilters) -> SearchResult:
             j, f.salary_min, f.salary_max, f.include_no_salary, f.include_estimated_salaries
         )
     ]
-    classified = [(j, _classify(j)) for j in kept]
+    kept.sort(key=_sort_key(f))
     if f.work_authorization:
-        classified = [x for x in classified if x[1].classification in f.work_authorization]
-    classified.sort(key=_sort_key(f))
-
-    page = classified[f.offset : f.offset + f.limit]
+        # The filter needs every candidate classified.
+        pairs = [(j, _classify(j)) for j in kept]
+        pairs = [x for x in pairs if x[1].classification in f.work_authorization]
+        matched = [j for j, _ in pairs]
+        page = pairs[f.offset : f.offset + f.limit]
+    else:
+        # Otherwise classify only the page being returned: thousands of matches are common
+        # with broad searches, and the rest are never shown.
+        matched = kept
+        page = [(j, _classify(j)) for j in kept[f.offset : f.offset + f.limit]]
     statuses: list[LinkStatus | None] = [None] * len(page)
     if f.verify_links and page:
         to_check = page[:MAX_LINK_CHECKS]
@@ -269,18 +326,18 @@ async def run_search(app: App, f: SearchFilters) -> SearchResult:
         if len(page) > MAX_LINK_CHECKS:
             notes.append(f"Links were verified for the first {MAX_LINK_CHECKS} results only.")
 
-    app.index.put_many([j for j, _ in classified[:INDEXED_MATCHES]])
+    app.index.put_many(matched[:INDEXED_MATCHES])
     summaries = [to_summary(j, a, s) for (j, a), s in zip(page, statuses, strict=True)]
     _add_source_notes(notes, summaries, f)
-    if not classified:
+    if not matched:
         notes.append(_no_results_hint(f, len(prepared.jobs)))
     return SearchResult(
         jobs=summaries,
         funnel=SearchFunnel(
-            scanned=len(raw),
-            removed_too_old=prepared.dropped_old,
+            scanned=fetched.seen,
+            removed_too_old=prepared.dropped_old + fetched.removed_old_early,
             removed_duplicates=prepared.dropped_duplicates,
-            matched_filters=len(classified),
+            matched_filters=len(matched),
             returned=len(summaries),
             offset=f.offset,
         ),
@@ -341,9 +398,8 @@ async def find_job(app: App, job_id: str) -> Job:
         source = next(
             (s for s in app.sources if s.name == ids[0] and isinstance(s, BoardSource)), None
         )
-        if source is not None:
-            result = await source.fetch_jobs()
-            for candidate in result.jobs:
+        if source is not None and source.has_board(ids[1]):  # only configured companies
+            for candidate in await source.fetch_board(ids[1]):
                 if candidate.id == job_id:
                     job = enrich(candidate)
                     app.index.put_many([job])

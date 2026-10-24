@@ -52,13 +52,13 @@ certificate store.
 ### 3. Resource exhaustion / denial of service
 
 Per-chunk and overall (45 s) timeouts; at most 3 attempts with exponential backoff and capped
-`Retry-After`; 2 requests per second per host; response size cap of 15 MB measured **after
-decompression** (so tiny "zip bomb" downloads are stopped); at most 3 company boards fetched at once per source;
+`Retry-After`; 5 requests per second per host by default (configurable from 0.5 to 10); response size cap of 15 MB measured **after
+decompression** (so tiny "zip bomb" downloads are stopped); at most 8 company boards fetched at once per source, with every board download shared and cached (a slow board is never fetched twice) and a time budget per search;
 page caps (The Muse 15, Adzuna 3); at most 3 title queries to search-style sources; input length
 and count limits on every tool argument; bounded regular expressions (pathological-input tests);
-the in-memory job index holds at most 3,000 jobs.
+the in-memory job index holds at most 3,000 jobs; full-text caches are bounded (25 Greenhouse boards).
 
-**Remaining risk.** A very large (but under-cap) response temporarily uses memory (tens of MB).
+**Remaining risk.** A very large (but under-cap) response temporarily uses memory (tens of MB). With the 605-company starter list the server holds roughly 0.6 to 0.7 GB once warm (measured); a much longer list would use proportionally more, so the company list is capped at 1,000 per source.
 
 ### 4. Secret leakage (API keys)
 

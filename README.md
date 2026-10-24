@@ -33,6 +33,16 @@ security clearance).
 
 ---
 
+## What this searches (and what it does not)
+
+There is no free, official "search every job board" service. Greenhouse, Lever and Ashby are
+**not** job sites you can search: they are the systems individual companies use to publish
+their own openings, and their public APIs only answer "list the open jobs of company X". So this
+tool reads **a list of companies** (`companies.yaml`) and filters their postings. It ships with a
+starter list of **605 companies** (`companies.example.yaml`), and you can add or remove any.
+Indeed, LinkedIn and Glassdoor forbid automated access and have no free search API, so they are
+not used.
+
 ## What you get
 
 Four tools Claude can call:
@@ -48,15 +58,17 @@ Four tools Claude can call:
 
 | Source | Cost | Needs | What it gives |
 |---|---|---|---|
-| **Greenhouse** | Free | A list of companies | Every open job of each listed company. Salary only when published. |
-| **Lever** | Free | A list of companies | Same. (EU-hosted boards use `lever_eu`.) |
-| **Ashby** | Free | A list of companies | Same, with good structured salary data. |
+| **Greenhouse** | Free | A list of companies (336 in the starter list) | Every open job of each listed company. Salary only when published. |
+| **Lever** | Free | A list of companies (57 in the starter list) | Same. (EU-hosted boards use `lever_eu`.) |
+| **Ashby** | Free | A list of companies (212 in the starter list) | Same, with good structured salary data. |
 | **The Muse** | Free | Nothing (a free key raises the rate limit) | Broad search across many employers. **Many listings are old**, and it cannot confirm a job is still open. |
 | **Adzuna** | **Paid** beyond a small trial | App id + key | Broad search with salary estimates. *Optional*; skipped when not configured. |
 
 Notes:
 
-* The company-board sources only see companies **you list** in `companies.yaml`.
+* The company-board sources only see the companies in your list. The starter list was built by
+  testing about 1,600 candidate names against the three services on 2026-10-23; boards that
+  existed and had open jobs were kept. Companies change systems, so some boards will go stale.
 * Adzuna's free sign-up gave only a 25-call trial when this was written; real use is a paid plan.
   Nothing breaks without it.
 * Use of each service is subject to that service's own terms. Adzuna asks for an "Adzuna"
@@ -97,7 +109,9 @@ uv sync --locked
 `uv sync --locked` creates a private environment with Python 3.12 and the exact pinned
 dependencies. Nothing is installed system-wide.
 
-### 3. Choose your companies
+### 3. Choose your companies (optional)
+
+The starter list works as is. To use your own list instead, or to trim it:
 
 ```bash
 cp companies.example.yaml companies.yaml          # macOS / Linux
@@ -293,6 +307,7 @@ Shows each source, how many companies are configured, and whether a tiny test re
 | `JOB_SEARCH_COMPANIES_FILE` | environment | `<home>/companies.yaml` | Use a different company list file. |
 | `JOB_SEARCH_MAX_AGE_DAYS` | environment | `30` | Default posting age limit (1 to 365). |
 | `JOB_SEARCH_MAX_RESPONSE_MB` | environment | `15` | Largest response accepted from any source (1 to 50). |
+| `JOB_SEARCH_REQUESTS_PER_SECOND` | environment | `5` | Maximum requests per second to each service (0.5 to 10). |
 | `JOB_SEARCH_LOG_LEVEL` | environment | `WARNING` | Logging goes to stderr only. |
 
 Real environment variables override `.env`. Only `ADZUNA_*`, `MUSE_*` and `JOB_SEARCH_*` names are
@@ -329,9 +344,19 @@ authorization, sort, and return a page.
   the server never has to visit employer sites. Greenhouse and Lever answer live or gone; Ashby is
   checked against the company's current board; **The Muse and Adzuna are always "unverified"**
   (The Muse still serves long-closed jobs). Open the link yourself before applying.
-* **Search size:** The Muse and Adzuna are search-style sources; at most 3 title phrases are sent
-  to them. A cold search takes roughly 10 seconds (sources are read politely, at most 2
-  requests per second per host); repeats within 15 minutes are served from memory.
+* **Speed and warm-up.** With hundreds of companies, loading is the slow part. Greenhouse is read
+  in two steps: the small list of titles, locations and dates first, then full text only for
+  companies that still have candidates after your filters. Requests are limited to 5 per second
+  per service. A search waits at most about 25 seconds: **the first search or two after the app
+  starts may return partial results**, with a warning saying how many company boards were still
+  loading. They keep loading in the background; ask again after about a minute and results are
+  complete, and later searches take a few seconds. Data is reused for 30 minutes.
+* **Memory:** once everything is loaded the server uses roughly 0.6 to 0.7 GB (Ashby boards are
+  the heaviest, about 1.7 MB each; Greenhouse boards are cheap). Memory is freed when the app
+  quits. To use less, trim `companies.yaml`.
+* **Broad searches are slow.** A search with no `job_titles` matches thousands of postings and needs
+  full text for almost every company, so it takes longer and may be partial. Give a job title.
+* The Muse and Adzuna are search-style sources; at most 3 title phrases are sent to them.
 
 ## Work-authorization detection
 
@@ -379,7 +404,7 @@ Full threat review: [SECURITY.md](SECURITY.md). The short version:
 * **Network allowlist.** HTTPS only, only to six known hosts (`boards-api.greenhouse.io`,
   `api.lever.co`, `api.eu.lever.co`, `api.ashbyhq.com`, `www.themuse.com`, `api.adzuna.com`);
   redirects are re-checked against the list; timeouts, retries with backoff, per-host rate limits
-  and a response-size cap apply to every request.
+  (5 requests per second by default) and a response-size cap apply to every request.
 * **Inputs are validated** (types, ranges, lengths, allowed values); malformed or malicious ids are
   refused before they can reach a URL.
 * **Secrets:** read from the environment or `.env` (git-ignored), never logged, never put into
@@ -428,7 +453,8 @@ approvals on for powerful tools, and read what Claude proposes before approving.
 | "Configuration problem: invalid companies.yaml" | Names may only contain letters, digits, `-`, `_`; run `uv run job-search-mcp --check`. |
 | A source shows `error` | Run `uv run job-search-mcp --check`; a company name may be wrong, or the service is down. |
 | Few or no results | Read the `funnel` and `notes` in the result: most postings are older than your age limit, and the company list is what limits supply. Add companies to `companies.yaml`. |
-| The first search is slow | Normal (about 10 s); repeats are fast. |
+| The first search is slow or says "company boards loaded within the time limit" | Normal with a long list: ask again after a minute. Trim `companies.yaml` to make it faster. |
+| The server uses a lot of memory | Expected with 600 companies (about 0.7 GB). Trim `companies.yaml`. |
 
 ---
 
@@ -461,7 +487,7 @@ Adding a source means: write a class in `sources/`, add its host to `ALLOWED_HOS
 
 ## Known limitations
 
-* Only companies you list (plus The Muse / Adzuna search) are searched; coverage is not "all jobs".
+* Only the companies in your list (plus The Muse / Adzuna search) are searched; coverage is not "all jobs".
 * The Muse has many stale postings and cannot confirm a job is open.
 * Level, US-location, salary-from-text and work-authorization are heuristics.
 * Job titles match by words, with no synonyms ("BI analyst" will not find "Business Intelligence

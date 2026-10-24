@@ -44,7 +44,7 @@ class FakeBoard(BoardSource):
     """A company-board source that returns canned jobs (no network)."""
 
     def __init__(self, name, jobs, warnings=None):
-        super().__init__(None, ["x"])  # type: ignore[arg-type]
+        super().__init__(None, ["acme"])  # type: ignore[arg-type]
         self.name = name
         self._canned = jobs
         self._warnings = warnings or []
@@ -65,6 +65,10 @@ class FakeBoard(BoardSource):
     async def fetch_jobs(self, query=None):
         self.calls += 1
         return FetchResult(jobs=list(self._canned), warnings=list(self._warnings))
+
+    async def fetch_board(self, board):
+        self.calls += 1
+        return list(self._canned)
 
 
 class FakeSearch(JobSource):

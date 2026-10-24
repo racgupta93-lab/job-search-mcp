@@ -1,7 +1,8 @@
 """Greenhouse public Job Board API (no key needed for reading).
 
 Docs: https://developers.greenhouse.io/job-board.html
-List: GET https://boards-api.greenhouse.io/v1/boards/{board}/jobs?content=true
+List: GET https://boards-api.greenhouse.io/v1/boards/{board}/jobs            (light)
+      GET https://boards-api.greenhouse.io/v1/boards/{board}/jobs?content=true   (full text)
 Note: the list has no pay field; pay ranges exist only on the single-job
       endpoint (?pay_transparency=true), so salary is left empty here.
 """
@@ -56,10 +57,17 @@ def parse_job(board: str, raw: Any) -> Job | None:
 
 
 class GreenhouseSource(BoardSource):
+    """Two-stage: the plain list is ~18x smaller than the list with full text, and it
+    still has title, location and dates, so full text is fetched only when needed."""
+
     name = "greenhouse"
+    two_stage = True
     config_hint = "add Greenhouse company names under 'greenhouse:' in companies.yaml"
 
     def _list_url(self, board: str) -> str:
+        return f"{BASE_URL}/{board}/jobs"
+
+    def _content_url(self, board: str) -> str:
         return f"{BASE_URL}/{board}/jobs?content=true"
 
     def _check_url(self, board: str) -> str:
