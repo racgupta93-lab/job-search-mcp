@@ -147,6 +147,20 @@ class SafeHttpClient:
         except ValueError:
             raise FetchError(f"invalid JSON from {safe_label(url)}") from None
 
+    async def post_json(
+        self,
+        url: str,
+        body: dict[str, Any],
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
+        """POST a JSON body (a search request) and parse the JSON answer. Same safety rules."""
+        raw = await self.get_bytes(url, headers=headers, method="POST", json_body=body)
+        try:
+            return json.loads(raw)
+        except ValueError:
+            raise FetchError(f"invalid JSON from {safe_label(url)}") from None
+
     async def get_bytes(
         self,
         url: str,
@@ -154,6 +168,7 @@ class SafeHttpClient:
         params: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
         method: str = "GET",
+        json_body: dict[str, Any] | None = None,
     ) -> bytes:
         validate_url(url, self._allowed)
         label = safe_label(url)
@@ -161,7 +176,7 @@ class SafeHttpClient:
         for attempt in range(MAX_ATTEMPTS):
             try:
                 async with asyncio.timeout(OVERALL_TIMEOUT_SECONDS):
-                    return await self._fetch_once(url, params, headers, method)
+                    return await self._fetch_once(url, params, headers, method, json_body)
             except _Retry as retry:
                 last_reason = retry.reason
                 delay = retry.delay
@@ -185,6 +200,7 @@ class SafeHttpClient:
         params: dict[str, Any] | None,
         headers: dict[str, str] | None,
         method: str,
+        json_body: dict[str, Any] | None = None,
     ) -> bytes:
         current = url
         for hop in range(MAX_REDIRECTS + 1):
@@ -196,9 +212,12 @@ class SafeHttpClient:
                 current,
                 params=params if hop == 0 else None,
                 headers=headers if hop == 0 else None,
+                json=json_body if hop == 0 else None,
             ) as resp:
                 status = resp.status_code
                 if status in _REDIRECT_CODES:
+                    if method == "POST":  # a search request must never be replayed elsewhere
+                        raise FetchError(f"{safe_label(current)} redirected a POST request")
                     location = resp.headers.get("location")
                     if not location:
                         raise FetchError("redirect without a location")

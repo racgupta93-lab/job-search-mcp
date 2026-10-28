@@ -78,6 +78,10 @@ class JobSource(ABC):
     async def check(self) -> SourceStatus:
         """Cheaply verify the source is configured and reachable."""
 
+    async def complete_job(self, job: Job) -> Job:
+        """Full text for one posting (used by get_job_details). Default: already complete."""
+        return job
+
 
 @dataclass
 class _Loaded:

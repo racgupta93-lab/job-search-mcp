@@ -6,7 +6,7 @@ considered, what was done about each, and what risk remains.
 
 **Scope and assumptions.** The server runs locally as your user, over stdio, started by Claude
 Desktop or Claude Code. It trusts: your operating system, the Python/uv toolchain, the pinned
-dependencies, and TLS to seven named hosts. It does **not** trust: any text inside a job posting,
+dependencies, and TLS to seven named hosts, and to the exact career-site hosts of Workday tenants the user lists. It does **not** trust: any text inside a job posting,
 any response body from a job source, or the tool arguments it receives.
 
 ## Threats, mitigations, remaining risk
@@ -36,7 +36,7 @@ write, or spend, and read proposed actions before approving.
 
 | Mitigation | Where |
 |---|---|
-| HTTPS only; exact host allowlist of seven hosts; no embedded credentials, no non-443 ports, no trailing-dot hosts | `http_client.validate_url` |
+| HTTPS only; exact host allowlist of seven fixed hosts plus the exact Workday hosts the user lists; no embedded credentials, no non-443 ports, no trailing-dot hosts | `http_client.validate_url` |
 | Redirects are followed manually (max 3) and **each hop is re-validated**; query parameters and custom headers are sent only to the first host | `http_client._fetch_once` |
 | Environment proxy / netrc settings ignored (`trust_env=False`) | `http_client.py` |
 | Job ids and company names are validated against strict patterns before being placed in a URL | `search.parse_job_id`, `config.BOARD_TOKEN` |
@@ -49,6 +49,25 @@ downgrade, redirect to another host, redirect loops, IP literals and `localhost`
 *data*; that data is handled as untrusted text (see 1). Trust in TLS depends on the system's
 certificate store.
 
+### 2b. The unofficial Workday source
+
+Workday has no documented public API for postings. The source uses the address each company's own
+career page uses, at the project owner's explicit request. Nothing states that this use is permitted.
+
+| Mitigation | Where |
+|---|---|
+| Only tenants listed by the user are contacted; entries must match a strict `tenant.wdN.Site` pattern | `config.py`, `sources/workday.py` |
+| Its own HTTP client allows exactly those tenant hosts (never a `*.myworkdayjobs.com` wildcard); the main client does not know them | `app.py`, `tests/test_workday.py` |
+| `robots.txt` is read for each site first; a disallow, or an unreadable file, means the site is skipped (it fails closed) | `sources/workday.py` |
+| Gentler rate (2 requests per second per site), at most 5 pages per search, at most 25 full-text downloads per company, 30-minute cache | `app.py`, `sources/workday.py` |
+| POST requests are never followed across redirects, so a search body cannot be replayed elsewhere | `http_client.py` |
+| Paths from the service are validated (`/job/...`, no `..`) before being placed in a URL | `sources/workday.py` |
+
+**Remaining risk.** `robots.txt` is a courtesy signal and not permission; Workday's or a company's
+terms may prohibit this use, and the endpoint can change or be blocked at any time. The legal and
+terms-of-service responsibility for using this source rests with its user. To remove the risk,
+delete the `workday:` entries.
+
 ### 3. Resource exhaustion / denial of service
 
 Per-chunk and overall (45 s) timeouts; at most 3 attempts with exponential backoff and capped
@@ -58,7 +77,7 @@ page caps (The Muse 15, Adzuna 3); at most 3 title queries to search-style sourc
 and count limits on every tool argument; bounded regular expressions (pathological-input tests);
 the in-memory job index holds at most 3,000 jobs; full-text caches are bounded (25 Greenhouse boards; 3,000 SmartRecruiters postings).
 
-**Remaining risk.** A very large (but under-cap) response temporarily uses memory (tens of MB). With the 630-company starter list the server holds roughly 0.6 to 0.7 GB once warm (measured); a much longer list would use proportionally more, so the company list is capped at 1,000 per source.
+**Remaining risk.** A very large (but under-cap) response temporarily uses memory (tens of MB). With the 651-company starter list the server holds roughly 0.6 to 0.7 GB once warm (measured); a much longer list would use proportionally more, so the company list is capped at 1,000 per source.
 
 ### 4. Secret leakage (API keys)
 
@@ -115,8 +134,8 @@ stdio only; `server.run(transport="stdio")` is hard-coded and the code opens no 
 
 ### 10. Terms of service and fair use
 
-Only official, documented public APIs or public job feeds are used; nothing is scraped and no login
-is used. Self-imposed rate limits apply. Adzuna attribution is added to results that include it.
+Apart from the unofficial Workday source (see 2b), only official, documented public APIs or public
+job feeds are used; nothing is scraped and no login is used. Self-imposed rate limits apply. Adzuna attribution is added to results that include it.
 
 **Remaining risk.** Greenhouse and Ashby do not publish explicit API usage terms on the pages
 reviewed, and Adzuna's free access is a small trial. Users are responsible for each service's terms.

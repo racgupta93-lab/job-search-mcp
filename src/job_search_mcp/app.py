@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from job_search_mcp.config import Settings, load_settings
-from job_search_mcp.http_client import SafeHttpClient
+from job_search_mcp.http_client import ALLOWED_HOSTS, SafeHttpClient
 from job_search_mcp.job_index import JobIndex
 from job_search_mcp.models import ListSourcesResult, SourceStatus
 from job_search_mcp.sources.adzuna import AdzunaSource
@@ -15,6 +15,7 @@ from job_search_mcp.sources.greenhouse import GreenhouseSource
 from job_search_mcp.sources.lever import LeverSource
 from job_search_mcp.sources.muse import MuseSource
 from job_search_mcp.sources.smartrecruiters import SmartRecruitersSource
+from job_search_mcp.sources.workday import WorkdaySource, hosts_for
 
 
 @dataclass
@@ -48,12 +49,20 @@ def build_app(settings: Settings | None = None) -> App:
         requests_per_second=settings.requests_per_second,
     )
     c = settings.companies
+    # Workday gets its own client: exact hosts for the tenants the user listed (nothing wider)
+    # and a gentler request rate, because it relies on an unofficial endpoint.
+    workday_http = SafeHttpClient(
+        max_response_bytes=settings.max_response_bytes,
+        requests_per_second=min(settings.requests_per_second, 2.0),
+        allowed_hosts=ALLOWED_HOSTS | hosts_for(c.workday),
+    )
     sources: list[JobSource] = [
         GreenhouseSource(http, c.greenhouse),
         LeverSource(http, c.lever),
         LeverSource(http, c.lever_eu, eu=True),
         AshbySource(http, c.ashby),
         SmartRecruitersSource(http, c.smartrecruiters),
+        WorkdaySource(workday_http, c.workday),
         MuseSource(http, settings.muse_api_key),
         AdzunaSource(http, settings.adzuna_app_id, settings.adzuna_app_key),
     ]

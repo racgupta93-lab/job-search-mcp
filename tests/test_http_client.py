@@ -246,3 +246,50 @@ def test_unexpected_library_errors_cannot_leak_the_api_key():
     )  # pragma: allowlist secret
     assert "ValueError" in str(err)
     assert err.__cause__ is None and err.__suppress_context__ is True
+
+
+# ---- POST (used for Workday-style search requests) ---------------------------------------
+
+
+def test_post_json_sends_the_body_and_parses_the_answer():
+    seen = []
+
+    def handler(req):
+        seen.append((req.method, req.content, req.headers.get("content-type")))
+        return httpx.Response(200, json={"total": 3})
+
+    out = run(make_client(handler).post_json(GOOD, {"searchText": "data", "limit": 20}))
+    assert out == {"total": 3}
+    method, content, ctype = seen[0]
+    assert method == "POST" and b'"searchText"' in content and "application/json" in ctype
+
+
+def test_post_is_still_limited_to_the_allowlist_and_https():
+    client = make_client(lambda r: httpx.Response(200, json={}))
+    for bad in ("https://evil.example.com/x", "http://boards-api.greenhouse.io/x"):
+        with pytest.raises(BlockedURLError):
+            run(client.post_json(bad, {}))
+
+
+def test_a_post_that_is_redirected_is_refused_not_replayed():
+    seen = []
+
+    def handler(req):
+        seen.append(req.url.host)
+        return httpx.Response(307, headers={"location": "https://api.lever.co/elsewhere"})
+
+    with pytest.raises(FetchError, match="redirected a POST"):
+        run(make_client(handler).post_json(GOOD, {"a": 1}))
+    assert seen == ["boards-api.greenhouse.io"]  # the body never reached the other host
+
+
+def test_post_retries_and_404_behave_like_get():
+    attempts = []
+
+    def flaky(req):
+        attempts.append(1)
+        return httpx.Response(503) if len(attempts) < 3 else httpx.Response(200, json={"ok": 1})
+
+    assert run(make_client(flaky).post_json(GOOD, {})) == {"ok": 1}
+    with pytest.raises(NotFoundError):
+        run(make_client(lambda r: httpx.Response(404)).post_json(GOOD, {}))

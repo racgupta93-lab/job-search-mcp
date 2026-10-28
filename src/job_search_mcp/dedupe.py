@@ -25,6 +25,7 @@ _SOURCE_RANK = {
     "lever_eu": 0,
     "ashby": 0,
     "smartrecruiters": 0,
+    "workday": 0,
     "muse": 1,
     "adzuna": 2,
 }

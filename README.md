@@ -39,15 +39,42 @@ There is no free, official "search every job board" service. Greenhouse, Lever, 
 SmartRecruiters are **not** job sites you can search: they are the systems individual companies
 use to publish their own openings, and their public APIs only answer "list the open jobs of
 company X". So this tool reads **a list of companies** (`companies.yaml`) and filters their
-postings. It ships with a starter list of **630 companies** (`companies.example.yaml`), and you
+postings. It ships with a starter list of **651 companies** (`companies.example.yaml`), and you
 can add or remove any. Indeed, LinkedIn and Glassdoor forbid automated access and have no free
 search API, so they are not used.
 
-**Big tech:** of 127 well-known tech companies I checked, **60 are searchable** (for example
-Stripe, Databricks, Airbnb, Cloudflare, Datadog, ServiceNow, OpenAI, Anthropic, Palantir). The
-rest, including Apple, Google, Amazon, Microsoft, Meta and many Workday-based companies, run
-sites with no documented public feed, and this tool does not scrape websites. The full list is in
+**Big tech:** of 127 well-known tech companies I checked, **80 are searchable**: 60 through
+official feeds (for example Stripe, Databricks, Airbnb, Cloudflare, Datadog, ServiceNow, OpenAI,
+Anthropic, Palantir) and 20 through Workday, which is **unofficial** (Nvidia, Salesforce, Intel,
+Micron, Adobe, Broadcom and others; see [Workday](#workday-unofficial)). The rest, including
+Apple, Google, Amazon, Microsoft, Meta and Netflix, run their own sites with no usable feed, and
+this tool does not scrape websites. The full list is in
 [docs/top-tech-coverage.md](docs/top-tech-coverage.md).
+
+## Workday (unofficial)
+
+Workday has **no public, documented API** for job postings. This source uses the same JSON
+address that each company's own public career page uses in a browser. It is included because the
+project owner asked for it, knowing that **nothing says this use is permitted**, that Workday or any
+company can change or block it without notice, and that each company's own terms may apply. You are
+responsible for how you use it. To switch it off, delete the `workday:` entries from your
+`companies.yaml` (or pass `sources` without `"workday"`).
+
+How it tries to be a good citizen:
+
+* It only contacts the sites **you list**, each as `tenant.wdN.SiteName` (the first part of the
+  career page address plus the site name, for example `nvidia.wd5.NVIDIAExternalCareerSite`). The
+  exact host of each is allowed, never a wildcard, and it uses its own HTTP client.
+* Before using a site it reads that site's `robots.txt`. If it disallows automated access, or the
+  file cannot be read, **the site is skipped** and the result says so.
+* It asks each company's server to search for your job titles instead of downloading everything, reads
+  at most 5 pages of 20 results per company, downloads full text only for candidates (at most 25 per
+  company), caches for 30 minutes, and makes at most 2 requests per second to each site.
+
+What it cannot do: results are ranked by relevance rather than date, so only the first 100 matches
+per company are read. The posting date in the list is relative ("Posted 3 Days Ago"; "30+ days" is
+treated as 31) and the exact date, locations and country arrive only with the full text. Locations
+such as "2 Locations" count as unknown until then.
 
 ## What you get
 
@@ -67,6 +94,7 @@ Four tools Claude can call:
 | **Greenhouse** | Free | A list of companies (355 in the starter list) | Every open job of each listed company. Salary only when published. |
 | **Lever** | Free | A list of companies (57 in the starter list) | Same. (EU-hosted boards use `lever_eu`.) |
 | **Ashby** | Free | A list of companies (214 in the starter list) | Same, with good structured salary data. |
+| **Workday** | Free, **unofficial** | A list of `tenant.wdN.Site` entries (21 in the starter list) | Postings of big companies such as Nvidia, Salesforce and Intel. See [Workday](#workday-unofficial) before relying on it. |
 | **SmartRecruiters** | Free | A list of companies (4 in the starter list) | Same, **US postings only** and the newest 500 per company; no pay field (salary comes from text when written). |
 | **The Muse** | Free | Nothing (a free key raises the rate limit) | Broad search across many employers. **Many listings are old**, and it cannot confirm a job is still open. |
 | **Adzuna** | **Paid** beyond a small trial | App id + key | Broad search with salary estimates. *Optional*; skipped when not configured. |
@@ -134,6 +162,7 @@ Edit `companies.yaml`. Each name is the last part of the company's public job-bo
 | `jobs.eu.lever.co/acme` | `lever_eu:` | `acme` |
 | `jobs.ashbyhq.com/notion` | `ashby:` | `notion` |
 | `jobs.smartrecruiters.com/ServiceNow` | `smartrecruiters:` | `servicenow` |
+| `nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite` | `workday:` | `nvidia.wd5.NVIDIAExternalCareerSite` (tenant.wdN.Site, **case matters**) |
 
 Names may contain only letters, digits, `-` and `_`. A wrong name is reported as a warning,
 not a crash. If `companies.yaml` is missing, the example list is used (and `--check` says so).
@@ -409,9 +438,9 @@ Full threat review: [SECURITY.md](SECURITY.md). The short version:
 * **Local only.** The server speaks over stdio to the app that launched it. No ports are opened.
 * **Read-only.** There are no tools that write, apply, send, or run commands. The server writes no
   files at all, and reads only `.env` and your company list.
-* **Network allowlist.** HTTPS only, only to seven known hosts (`boards-api.greenhouse.io`,
+* **Network allowlist.** HTTPS only, only to seven fixed hosts (`boards-api.greenhouse.io`,
   `api.lever.co`, `api.eu.lever.co`, `api.ashbyhq.com`, `api.smartrecruiters.com`,
-  `www.themuse.com`, `api.adzuna.com`);
+  `www.themuse.com`, `api.adzuna.com`) plus the exact Workday career-site hosts you list;
   redirects are re-checked against the list; timeouts, retries with backoff, per-host rate limits
   (5 requests per second by default) and a response-size cap apply to every request.
 * **Inputs are validated** (types, ranges, lengths, allowed values); malformed or malicious ids are
@@ -499,6 +528,8 @@ Adding a source means: write a class in `sources/`, add its host to `ALLOWED_HOS
 * Only the companies in your list (plus The Muse / Adzuna search) are searched; coverage is not "all jobs".
 * The Muse has many stale postings and cannot confirm a job is open.
 * Level, US-location, salary-from-text and work-authorization are heuristics.
+* Workday: unofficial, relevance-ranked results (first 100 matches per company), dates from the
+  list are approximate until full text loads, and it may stop working without notice.
 * SmartRecruiters: only US postings are requested, at most the newest 500 per company, and full text
   is fetched for at most 60 candidates per company per search (a warning says when more existed).
 * A few companies are unusually large (for example SpaceX, with about 2,800 postings): their full

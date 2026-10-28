@@ -21,8 +21,9 @@ def test_the_starter_list_is_valid_and_has_hundreds_of_companies():
 
 
 def test_every_name_is_a_safe_board_name():
-    for names in load().model_dump().values():
-        assert all(BOARD_TOKEN.fullmatch(name) for name in names)
+    for system, names in load().model_dump().items():
+        if system != "workday":  # Workday entries have their own format, tested below
+            assert all(BOARD_TOKEN.fullmatch(name) for name in names)
 
 
 def test_no_company_is_listed_twice_or_under_two_systems():
@@ -53,3 +54,10 @@ def test_the_companies_from_the_original_sample_are_still_there():
 def test_smartrecruiters_companies_are_present_and_unique():
     config = load()
     assert {"servicenow", "canva"} <= set(config.smartrecruiters)
+
+
+def test_workday_entries_are_valid_unique_and_include_the_big_names():
+    entries = load().workday
+    assert len(entries) >= 15 and len(entries) == len(set(entries))
+    assert "nvidia.wd5.NVIDIAExternalCareerSite" in entries
+    assert all(e.count(".") == 2 for e in entries)  # tenant.wdN.Site

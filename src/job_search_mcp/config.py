@@ -35,6 +35,22 @@ class CompaniesConfig(BaseModel):
     lever_eu: list[str] = Field(default_factory=list)  # companies on Lever's EU site
     ashby: list[str] = Field(default_factory=list)
     smartrecruiters: list[str] = Field(default_factory=list)
+    workday: list[str] = Field(default_factory=list)  # "tenant.wdN.Site" (unofficial source)
+
+    @field_validator("workday")
+    @classmethod
+    def _check_workday(cls, entries: list[str]) -> list[str]:
+        from job_search_mcp.sources.workday import ENTRY  # noqa: PLC0415  # avoids an import cycle
+
+        if len(entries) > MAX_COMPANIES_PER_SOURCE:
+            raise ValueError(f"at most {MAX_COMPANIES_PER_SOURCE} entries")
+        for entry in entries:
+            if not isinstance(entry, str) or not ENTRY.fullmatch(entry):
+                raise ValueError(
+                    f"invalid workday entry {str(entry)[:50]!r}: use tenant.wdN.SiteName, "
+                    "for example nvidia.wd5.NVIDIAExternalCareerSite"
+                )
+        return list(dict.fromkeys(entries))  # site names are case-sensitive: keep them as written
 
     @field_validator("greenhouse", "lever", "lever_eu", "ashby", "smartrecruiters")
     @classmethod

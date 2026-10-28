@@ -1,6 +1,6 @@
 # Which company job boards to search.
 #
-# This is a starter list of 630 companies whose public job boards were tested on 2026-10-23
+# This is a starter list of 651 companies whose public job boards were tested on 2026-10-23
 # and each had at least one open job at that time (Greenhouse and Lever boards were also checked
 # for a US-located job; Ashby boards were not individually checked for US location). Boards
 # change: companies switch systems, close boards or rename them. A missing board is only a
@@ -11,6 +11,11 @@
 # boards.greenhouse.io/<name>, jobs.lever.co/<name>, jobs.ashbyhq.com/<name>.
 # Letters, digits, "-" and "_" only. Use "lever_eu" for boards at jobs.eu.lever.co, and
 # "smartrecruiters" for jobs.smartrecruiters.com/<name> (US postings only).
+#
+# "workday" is different and UNOFFICIAL: Workday has no public API, so these entries use the
+# address that each company's own career page uses. Each entry is tenant.wdN.SiteName, taken from
+# the career page address (nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite). Case matters.
+# Every site is checked against its robots.txt first and skipped if it does not allow access.
 #
 # Cost of a long list: after the app starts, the first search or two return PARTIAL results
 # (and say so) while the boards finish loading, which takes about a minute. Once warm,
@@ -654,5 +659,28 @@ smartrecruiters:
   - canva
   - servicenow
   - westerndigital
+
+workday:
+  - accenture.wd103.AccentureCareers
+  - adobe.wd5.external_experienced
+  - autodesk.wd1.Ext
+  - broadcom.wd1.External_Career
+  - cadence.wd1.External_Careers
+  - crowdstrike.wd5.crowdstrikecareers
+  - ffive.wd5.f5jobs
+  - hp.wd5.ExternalCareerSite
+  - hpe.wd5.Jobsathpe
+  - intel.wd1.External
+  - kla.wd1.Search
+  - marvell.wd1.MarvellCareers
+  - micron.wd1.External
+  - motorolasolutions.wd5.Careers
+  - nvidia.wd5.NVIDIAExternalCareerSite
+  - salesforce.wd12.External_Career_Site
+  - salesforce.wd12.Slack
+  - workday.wd5.Workday
+  - zendesk.wd1.zendesk
+  - zillow.wd5.Zillow_Group_External
+  - zoom.wd5.Zoom
 
 lever_eu: []

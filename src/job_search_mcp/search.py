@@ -48,6 +48,7 @@ from job_search_mcp.sources.greenhouse import BASE_URL as GREENHOUSE_BASE
 from job_search_mcp.sources.greenhouse import fetch_pay
 from job_search_mcp.sources.lever import LeverSource
 from job_search_mcp.sources.smartrecruiters import BASE_URL as SMARTRECRUITERS_BASE
+from job_search_mcp.sources.workday import WorkdaySource
 from job_search_mcp.work_auth import DISCLAIMER, WorkAuthResult, classify_work_authorization
 
 if TYPE_CHECKING:
@@ -61,7 +62,8 @@ MAX_LINK_CHECKS = 20
 SEARCH_TIME_BUDGET_SECONDS = 25.0  # slower company boards finish in the background
 DETAIL_DESCRIPTION_CHARS = 8000
 INDEXED_MATCHES = 300  # how many matches get remembered for get_job_details
-_NATIVE_ID = re.compile(r"^[A-Za-z0-9-]{1,64}$")
+_NATIVE_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_WORKDAY_BOARD = re.compile(r"^[a-z0-9-]{1,40}\.wd\d{1,3}\.[A-Za-z0-9_-]{1,80}$")
 _JOB_ID = re.compile(r"^[a-z_]{3,20}(?::[A-Za-z0-9_.-]{1,100}){1,2}$")
 
 
@@ -73,7 +75,14 @@ def parse_job_id(job_id: str) -> tuple[str, str, str] | None:
     """Split "source:board:native" for board sources, validating every part, because
     the id comes from tool input and ends up inside a URL."""
     parts = job_id.split(":")
-    if len(parts) != 3 or not BOARD_TOKEN.fullmatch(parts[1]) or not _NATIVE_ID.fullmatch(parts[2]):
+    if len(parts) != 3:
+        return None
+    board_ok = (
+        _WORKDAY_BOARD.fullmatch(parts[1])
+        if parts[0] == "workday"
+        else BOARD_TOKEN.fullmatch(parts[1])
+    )
+    if not board_ok or not _NATIVE_ID.fullmatch(parts[2]):
         return None
     return parts[0], parts[1], parts[2]
 
@@ -192,6 +201,8 @@ async def _fetch_all(
                     salary_min=f.salary_min,
                     level=single_level,
                     max_results=per_query,
+                    prefilter=prefilter,
+                    time_budget=SEARCH_TIME_BUDGET_SECONDS,
                 )
                 for title in (titles or [None])
             ]
@@ -231,6 +242,9 @@ async def check_link(app: App, job: Job) -> LinkStatus:  # noqa: PLR0911  # one 
         if source == "greenhouse":
             await app.http.get_bytes(f"{GREENHOUSE_BASE}/{board}/jobs/{native}")
             return "live"
+        if source == "workday":
+            owner = next((s for s in app.sources if isinstance(s, WorkdaySource)), None)
+            return await owner.check_live(job) if owner is not None else "unverified"
         if source == "smartrecruiters":
             await app.http.get_bytes(f"{SMARTRECRUITERS_BASE}/{board}/postings/{native}")
             return "live"
@@ -428,9 +442,7 @@ async def get_details(app: App, job_id: str, verify_link: bool) -> JobDetails:
 
     if not job.description or not job.description_complete:
         # Some sources (SmartRecruiters) hand over full text one posting at a time.
-        owner = next(
-            (s for s in app.sources if s.name == job.source and isinstance(s, BoardSource)), None
-        )
+        owner = next((s for s in app.sources if s.name == job.source), None)
         if owner is not None:
             job = await owner.complete_job(job)
             app.index.put_many([job])
