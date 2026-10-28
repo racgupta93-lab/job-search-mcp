@@ -47,6 +47,7 @@ from job_search_mcp.sources.base import BoardSource, FetchResult, JobSource, Sou
 from job_search_mcp.sources.greenhouse import BASE_URL as GREENHOUSE_BASE
 from job_search_mcp.sources.greenhouse import fetch_pay
 from job_search_mcp.sources.lever import LeverSource
+from job_search_mcp.sources.smartrecruiters import BASE_URL as SMARTRECRUITERS_BASE
 from job_search_mcp.work_auth import DISCLAIMER, WorkAuthResult, classify_work_authorization
 
 if TYPE_CHECKING:
@@ -229,6 +230,9 @@ async def check_link(app: App, job: Job) -> LinkStatus:  # noqa: PLR0911  # one 
     try:
         if source == "greenhouse":
             await app.http.get_bytes(f"{GREENHOUSE_BASE}/{board}/jobs/{native}")
+            return "live"
+        if source == "smartrecruiters":
+            await app.http.get_bytes(f"{SMARTRECRUITERS_BASE}/{board}/postings/{native}")
             return "live"
         if source in {"lever", "lever_eu"}:
             lever = next(
@@ -421,6 +425,15 @@ async def get_details(app: App, job_id: str, verify_link: bool) -> JobDetails:
             if pay:
                 job = job.model_copy(update=pay)
                 app.index.put_many([job])
+
+    if not job.description or not job.description_complete:
+        # Some sources (SmartRecruiters) hand over full text one posting at a time.
+        owner = next(
+            (s for s in app.sources if s.name == job.source and isinstance(s, BoardSource)), None
+        )
+        if owner is not None:
+            job = await owner.complete_job(job)
+            app.index.put_many([job])
 
     link = await check_link(app, job) if verify_link else None
     if link == "gone":

@@ -35,13 +35,19 @@ security clearance).
 
 ## What this searches (and what it does not)
 
-There is no free, official "search every job board" service. Greenhouse, Lever and Ashby are
-**not** job sites you can search: they are the systems individual companies use to publish
-their own openings, and their public APIs only answer "list the open jobs of company X". So this
-tool reads **a list of companies** (`companies.yaml`) and filters their postings. It ships with a
-starter list of **605 companies** (`companies.example.yaml`), and you can add or remove any.
-Indeed, LinkedIn and Glassdoor forbid automated access and have no free search API, so they are
-not used.
+There is no free, official "search every job board" service. Greenhouse, Lever, Ashby and
+SmartRecruiters are **not** job sites you can search: they are the systems individual companies
+use to publish their own openings, and their public APIs only answer "list the open jobs of
+company X". So this tool reads **a list of companies** (`companies.yaml`) and filters their
+postings. It ships with a starter list of **630 companies** (`companies.example.yaml`), and you
+can add or remove any. Indeed, LinkedIn and Glassdoor forbid automated access and have no free
+search API, so they are not used.
+
+**Big tech:** of 127 well-known tech companies I checked, **60 are searchable** (for example
+Stripe, Databricks, Airbnb, Cloudflare, Datadog, ServiceNow, OpenAI, Anthropic, Palantir). The
+rest, including Apple, Google, Amazon, Microsoft, Meta and many Workday-based companies, run
+sites with no documented public feed, and this tool does not scrape websites. The full list is in
+[docs/top-tech-coverage.md](docs/top-tech-coverage.md).
 
 ## What you get
 
@@ -58,9 +64,10 @@ Four tools Claude can call:
 
 | Source | Cost | Needs | What it gives |
 |---|---|---|---|
-| **Greenhouse** | Free | A list of companies (336 in the starter list) | Every open job of each listed company. Salary only when published. |
+| **Greenhouse** | Free | A list of companies (355 in the starter list) | Every open job of each listed company. Salary only when published. |
 | **Lever** | Free | A list of companies (57 in the starter list) | Same. (EU-hosted boards use `lever_eu`.) |
-| **Ashby** | Free | A list of companies (212 in the starter list) | Same, with good structured salary data. |
+| **Ashby** | Free | A list of companies (214 in the starter list) | Same, with good structured salary data. |
+| **SmartRecruiters** | Free | A list of companies (4 in the starter list) | Same, **US postings only** and the newest 500 per company; no pay field (salary comes from text when written). |
 | **The Muse** | Free | Nothing (a free key raises the rate limit) | Broad search across many employers. **Many listings are old**, and it cannot confirm a job is still open. |
 | **Adzuna** | **Paid** beyond a small trial | App id + key | Broad search with salary estimates. *Optional*; skipped when not configured. |
 
@@ -126,6 +133,7 @@ Edit `companies.yaml`. Each name is the last part of the company's public job-bo
 | `jobs.lever.co/spotify` | `lever:` | `spotify` |
 | `jobs.eu.lever.co/acme` | `lever_eu:` | `acme` |
 | `jobs.ashbyhq.com/notion` | `ashby:` | `notion` |
+| `jobs.smartrecruiters.com/ServiceNow` | `smartrecruiters:` | `servicenow` |
 
 Names may contain only letters, digits, `-` and `_`. A wrong name is reported as a warning,
 not a crash. If `companies.yaml` is missing, the example list is used (and `--check` says so).
@@ -401,8 +409,9 @@ Full threat review: [SECURITY.md](SECURITY.md). The short version:
 * **Local only.** The server speaks over stdio to the app that launched it. No ports are opened.
 * **Read-only.** There are no tools that write, apply, send, or run commands. The server writes no
   files at all, and reads only `.env` and your company list.
-* **Network allowlist.** HTTPS only, only to six known hosts (`boards-api.greenhouse.io`,
-  `api.lever.co`, `api.eu.lever.co`, `api.ashbyhq.com`, `www.themuse.com`, `api.adzuna.com`);
+* **Network allowlist.** HTTPS only, only to seven known hosts (`boards-api.greenhouse.io`,
+  `api.lever.co`, `api.eu.lever.co`, `api.ashbyhq.com`, `api.smartrecruiters.com`,
+  `www.themuse.com`, `api.adzuna.com`);
   redirects are re-checked against the list; timeouts, retries with backoff, per-host rate limits
   (5 requests per second by default) and a response-size cap apply to every request.
 * **Inputs are validated** (types, ranges, lengths, allowed values); malformed or malicious ids are
@@ -490,6 +499,8 @@ Adding a source means: write a class in `sources/`, add its host to `ALLOWED_HOS
 * Only the companies in your list (plus The Muse / Adzuna search) are searched; coverage is not "all jobs".
 * The Muse has many stale postings and cannot confirm a job is open.
 * Level, US-location, salary-from-text and work-authorization are heuristics.
+* SmartRecruiters: only US postings are requested, at most the newest 500 per company, and full text
+  is fetched for at most 60 candidates per company per search (a warning says when more existed).
 * A few companies are unusually large (for example SpaceX, with about 2,800 postings): their full
   text can exceed the 15 MB response cap, so their postings are shown without full text (and
   without work-authorization or salary-from-text analysis) and a warning says so. Raise

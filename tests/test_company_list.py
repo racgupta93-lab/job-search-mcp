@@ -48,3 +48,8 @@ def test_the_companies_from_the_original_sample_are_still_there():
         "linear",
     ):
         assert name in everyone
+
+
+def test_smartrecruiters_companies_are_present_and_unique():
+    config = load()
+    assert {"servicenow", "canva"} <= set(config.smartrecruiters)

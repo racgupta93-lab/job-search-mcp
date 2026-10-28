@@ -14,6 +14,7 @@ from job_search_mcp.sources.base import JobSource
 from job_search_mcp.sources.greenhouse import GreenhouseSource
 from job_search_mcp.sources.lever import LeverSource
 from job_search_mcp.sources.muse import MuseSource
+from job_search_mcp.sources.smartrecruiters import SmartRecruitersSource
 
 
 @dataclass
@@ -52,6 +53,7 @@ def build_app(settings: Settings | None = None) -> App:
         LeverSource(http, c.lever),
         LeverSource(http, c.lever_eu, eu=True),
         AshbySource(http, c.ashby),
+        SmartRecruitersSource(http, c.smartrecruiters),
         MuseSource(http, settings.muse_api_key),
         AdzunaSource(http, settings.adzuna_app_id, settings.adzuna_app_key),
     ]

@@ -34,8 +34,9 @@ class CompaniesConfig(BaseModel):
     lever: list[str] = Field(default_factory=list)
     lever_eu: list[str] = Field(default_factory=list)  # companies on Lever's EU site
     ashby: list[str] = Field(default_factory=list)
+    smartrecruiters: list[str] = Field(default_factory=list)
 
-    @field_validator("greenhouse", "lever", "lever_eu", "ashby")
+    @field_validator("greenhouse", "lever", "lever_eu", "ashby", "smartrecruiters")
     @classmethod
     def _check_tokens(cls, tokens: list[str]) -> list[str]:
         if len(tokens) > MAX_COMPANIES_PER_SOURCE:

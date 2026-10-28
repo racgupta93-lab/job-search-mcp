@@ -6,7 +6,7 @@ considered, what was done about each, and what risk remains.
 
 **Scope and assumptions.** The server runs locally as your user, over stdio, started by Claude
 Desktop or Claude Code. It trusts: your operating system, the Python/uv toolchain, the pinned
-dependencies, and TLS to six named hosts. It does **not** trust: any text inside a job posting,
+dependencies, and TLS to seven named hosts. It does **not** trust: any text inside a job posting,
 any response body from a job source, or the tool arguments it receives.
 
 ## Threats, mitigations, remaining risk
@@ -36,7 +36,7 @@ write, or spend, and read proposed actions before approving.
 
 | Mitigation | Where |
 |---|---|
-| HTTPS only; exact host allowlist of six hosts; no embedded credentials, no non-443 ports, no trailing-dot hosts | `http_client.validate_url` |
+| HTTPS only; exact host allowlist of seven hosts; no embedded credentials, no non-443 ports, no trailing-dot hosts | `http_client.validate_url` |
 | Redirects are followed manually (max 3) and **each hop is re-validated**; query parameters and custom headers are sent only to the first host | `http_client._fetch_once` |
 | Environment proxy / netrc settings ignored (`trust_env=False`) | `http_client.py` |
 | Job ids and company names are validated against strict patterns before being placed in a URL | `search.parse_job_id`, `config.BOARD_TOKEN` |
@@ -56,9 +56,9 @@ Per-chunk and overall (45 s) timeouts; at most 3 attempts with exponential backo
 decompression** (so tiny "zip bomb" downloads are stopped); at most 8 company boards fetched at once per source, with every board download shared and cached (a slow board is never fetched twice) and a time budget per search;
 page caps (The Muse 15, Adzuna 3); at most 3 title queries to search-style sources; input length
 and count limits on every tool argument; bounded regular expressions (pathological-input tests);
-the in-memory job index holds at most 3,000 jobs; full-text caches are bounded (25 Greenhouse boards).
+the in-memory job index holds at most 3,000 jobs; full-text caches are bounded (25 Greenhouse boards; 3,000 SmartRecruiters postings).
 
-**Remaining risk.** A very large (but under-cap) response temporarily uses memory (tens of MB). With the 605-company starter list the server holds roughly 0.6 to 0.7 GB once warm (measured); a much longer list would use proportionally more, so the company list is capped at 1,000 per source.
+**Remaining risk.** A very large (but under-cap) response temporarily uses memory (tens of MB). With the 630-company starter list the server holds roughly 0.6 to 0.7 GB once warm (measured); a much longer list would use proportionally more, so the company list is capped at 1,000 per source.
 
 ### 4. Secret leakage (API keys)
 

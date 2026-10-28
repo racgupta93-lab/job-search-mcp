@@ -1,6 +1,6 @@
 # Which company job boards to search.
 #
-# This is a starter list of 605 companies whose public job boards were tested on 2026-10-23
+# This is a starter list of 630 companies whose public job boards were tested on 2026-10-23
 # and each had at least one open job at that time (Greenhouse and Lever boards were also checked
 # for a US-located job; Ashby boards were not individually checked for US location). Boards
 # change: companies switch systems, close boards or rename them. A missing board is only a
@@ -9,7 +9,8 @@
 # To use your own list, copy this file to "companies.yaml" (git ignores that one) and edit it.
 # Each name is the last part of the company's public job-board address, e.g.
 # boards.greenhouse.io/<name>, jobs.lever.co/<name>, jobs.ashbyhq.com/<name>.
-# Letters, digits, "-" and "_" only. Use "lever_eu" for boards at jobs.eu.lever.co.
+# Letters, digits, "-" and "_" only. Use "lever_eu" for boards at jobs.eu.lever.co, and
+# "smartrecruiters" for jobs.smartrecruiters.com/<name> (US postings only).
 #
 # Cost of a long list: after the app starts, the first search or two return PARTIAL results
 # (and say so) while the boards finish loading, which takes about a minute. Once warm,
@@ -23,6 +24,7 @@ greenhouse:
   - adyen
   - affirm
   - airbnb
+  - airship
   - airtable
   - akunacapital
   - algolia
@@ -67,8 +69,10 @@ greenhouse:
   - buildkite
   - builtin
   - bungie
+  - c3iot
   - calendly
   - calm
+  - canonical
   - cargurus
   - carta
   - carvana
@@ -78,6 +82,7 @@ greenhouse:
   - circleci
   - cleo
   - clever
+  - cloudflare
   - cockroachlabs
   - cognite
   - coinbase
@@ -88,6 +93,7 @@ greenhouse:
   - coursera
   - cribl
   - cultureamp
+  - customerio
   - databricks
   - datadog
   - dataiku
@@ -136,6 +142,7 @@ greenhouse:
   - gitlab
   - glossier
   - gocardless
+  - godaddy
   - gofundme
   - goguardian
   - grafanalabs
@@ -150,8 +157,11 @@ greenhouse:
   - hellofresh
   - highradius
   - homelight
+  - homeward
   - honeycomb
   - honor
+  - hover
+  - hp
   - hudl
   - huntress
   - idme
@@ -186,6 +196,7 @@ greenhouse:
   - litmos
   - lob
   - logicmonitor
+  - lucidmotors
   - lucidsoftware
   - lyft
   - mabl
@@ -208,6 +219,7 @@ greenhouse:
   - natera
   - nayya
   - neo4j
+  - netlify
   - newrelic
   - nextdoor
   - nextiva
@@ -242,6 +254,7 @@ greenhouse:
   - prophet
   - prove
   - public
+  - purestorage
   - qualtrics
   - quilt
   - quip
@@ -254,6 +267,7 @@ greenhouse:
   - riotgames
   - ripple
   - riskified
+  - roadie
   - robinhood
   - roblox
   - rocketlab
@@ -262,6 +276,7 @@ greenhouse:
   - rumble
   - salsify
   - samsara
+  - samsungresearchamerica
   - scaleai
   - scopely
   - seatgeek
@@ -277,6 +292,7 @@ greenhouse:
   - snorkelai
   - sofi
   - spacex
+  - spin
   - spire
   - sproutsocial
   - squarespace
@@ -287,12 +303,14 @@ greenhouse:
   - stitchfix
   - stockx
   - stripe
+  - subsplash
   - suki
   - sumologic
   - sweetgreen
   - synack
   - syndio
   - tailscale
+  - taketwo
   - talkspace
   - tanium
   - tatari
@@ -321,6 +339,7 @@ greenhouse:
   - udacity
   - udemy
   - ujet
+  - ultimate
   - unbounce
   - upgrade
   - upkeep
@@ -339,6 +358,7 @@ greenhouse:
   - vts
   - wasabi
   - waymo
+  - wikimedia
   - wise
   - workato
   - workstream
@@ -417,6 +437,7 @@ ashby:
   - acorns
   - airbyte
   - amplitude
+  - analog
   - angi
   - anyscale
   - armory
@@ -606,6 +627,7 @@ ashby:
   - tractable
   - truelayer
   - trulioo
+  - uipath
   - ultra
   - unstructured
   - upside
@@ -626,5 +648,11 @@ ashby:
   - ycombinator
   - zapier
   - zip
+
+smartrecruiters:
+  - aristanetworks
+  - canva
+  - servicenow
+  - westerndigital
 
 lever_eu: []

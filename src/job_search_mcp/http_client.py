@@ -34,6 +34,7 @@ ALLOWED_HOSTS = frozenset(
         "api.eu.lever.co",
         "api.ashbyhq.com",
         "api.adzuna.com",
+        "api.smartrecruiters.com",
         "www.themuse.com",
     }
 )

@@ -19,7 +19,15 @@ from urllib.parse import parse_qsl, urlsplit
 from job_search_mcp.models import Job
 
 # Lower number = preferred (the employer's own board, then aggregators).
-_SOURCE_RANK = {"greenhouse": 0, "lever": 0, "lever_eu": 0, "ashby": 0, "muse": 1, "adzuna": 2}
+_SOURCE_RANK = {
+    "greenhouse": 0,
+    "lever": 0,
+    "lever_eu": 0,
+    "ashby": 0,
+    "smartrecruiters": 0,
+    "muse": 1,
+    "adzuna": 2,
+}
 _COMPANY_SUFFIX = re.compile(r"\b(inc|llc|ltd|corp|corporation|co|company|plc|gmbh|the)\b\.?", re.I)
 _BRACKETS = re.compile(r"[\(\[].*?[\)\]]")
 

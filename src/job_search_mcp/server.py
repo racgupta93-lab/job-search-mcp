@@ -55,7 +55,9 @@ _LOCAL_ONLY = ToolAnnotations(
 
 LevelName = Literal["intern", "junior", "mid", "senior", "lead", "manager"]
 WorkplaceName = Literal["remote", "hybrid", "onsite"]
-SourceName = Literal["greenhouse", "lever", "lever_eu", "ashby", "muse", "adzuna"]
+SourceName = Literal[
+    "greenhouse", "lever", "lever_eu", "ashby", "smartrecruiters", "muse", "adzuna"
+]
 WorkAuthName = Literal[
     "sponsorship_offered", "no_sponsorship", "citizen_only", "clearance_required", "unclear"
 ]

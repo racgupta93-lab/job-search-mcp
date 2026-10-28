@@ -98,7 +98,8 @@ class BoardSource(JobSource):
     cache_ttl_seconds = 1800  # postings change slowly; searches within 30 min reuse the data
     concurrent_boards = 8
     content_cache_boards = 25  # full-text boards kept at once (they are large)
-    two_stage = False  # True: _list_url is a light list and _content_url has the full text
+    two_stage = False  # True: _list_url is a light list and the full text comes separately
+    whole_board_content = True  # two-stage only: False when text is fetched posting by posting
     config_hint = ""
 
     def __init__(self, http: SafeHttpClient, boards: list[str]) -> None:
@@ -212,27 +213,38 @@ class BoardSource(JobSource):
         loaded = await self._shared("content" if self.two_stage else "list", board)
         return list(loaded.jobs)
 
+    async def _complete(self, board: str, survivors: list[Job]) -> tuple[list[Job], list[str]]:
+        """Add full text to candidate postings. Default: one download of the whole board.
+
+        Sources whose full text must be fetched posting by posting override this.
+        """
+        full = await self._shared("content", board)
+        if full.jobs:
+            by_id = {job.id: job for job in full.jobs}
+            return [by_id.get(job.id, job) for job in survivors], []
+        # Could not get the full text: keep the candidates, and say the text is missing.
+        jobs = [job.model_copy(update={"description_complete": False}) for job in survivors]
+        return jobs, full.warnings or [f"{self.name}: full text unavailable for '{board}'"]
+
+    async def complete_job(self, job: Job) -> Job:
+        """Full text for one posting (used by get_job_details). Default: already complete."""
+        return job
+
     async def _board_for_query(
         self, board: str, prefilter: Callable[[Job], bool] | None
     ) -> FetchResult:
-        if not (self.two_stage and prefilter is not None):
+        per_posting = self.two_stage and not self.whole_board_content
+        if not (self.two_stage and (prefilter is not None or per_posting)):
             loaded = await self._shared("content" if self.two_stage else "list", board)
             return FetchResult(list(loaded.jobs), list(loaded.warnings), seen=len(loaded.jobs))
 
         light = await self._shared("list", board)
-        survivors = [job for job in light.jobs if prefilter(job)]
+        survivors = light.jobs if prefilter is None else [j for j in light.jobs if prefilter(j)]
         warnings = list(light.warnings)
         if not survivors:
             return FetchResult([], warnings, seen=len(light.jobs))
-        full = await self._shared("content", board)
-        if full.jobs:
-            by_id = {job.id: job for job in full.jobs}
-            jobs = [by_id.get(job.id, job) for job in survivors]
-        else:
-            # Could not get the full text: keep the candidates, and say the text is missing.
-            jobs = [job.model_copy(update={"description_complete": False}) for job in survivors]
-            warnings += full.warnings or [f"{self.name}: full text unavailable for '{board}'"]
-        return FetchResult(jobs, warnings, seen=len(light.jobs))
+        jobs, more = await self._complete(board, survivors)
+        return FetchResult(jobs, warnings + more, seen=len(light.jobs))
 
     async def fetch_jobs(self, query: SourceQuery | None = None) -> FetchResult:
         prefilter = query.prefilter if query else None
