@@ -23,3 +23,15 @@ companies.yaml
 # Tool caches
 .pytest_cache/
 .ruff_cache/
+
+# Claude Code: local settings can contain approved commands with pasted secrets.
+# Never commit these.
+.claude/settings.local.json
+.claude/*.local.*
+CLAUDE.local.md
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+credentials*.json
+service-account*.json
